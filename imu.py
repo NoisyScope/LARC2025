@@ -4,6 +4,7 @@ import time
 import matplotlib.pyplot as plt
 from collections import deque
 from scipy.spatial.transform import Rotation as R
+from ekf_imu_fusion import ExtendedKalmanFilter  
 
 class ExtendedKalmanFilter:
     """ EKF for sensor fusion with IMU data (position, velocity, orientation). """
@@ -90,9 +91,6 @@ def integrate_gyroscope(gyro, quat, dt):
     new_rotation = rotation * R.from_rotvec(gyro_vector)
     return new_rotation.as_quat()
 
-
-# Import the EKF class (assumed to be defined in a separate file or previous cell)
-from ekf_imu_fusion import ExtendedKalmanFilter  
 
 # Setup real-time plotting
 plt.ion()  # Turn on interactive mode
