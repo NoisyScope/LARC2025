@@ -1,0 +1,11 @@
+version: '3'
+
+services:
+  oak-imu-app:
+    build: .
+    privileged: true  # Required for camera access
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs  # Mount logs directory

@@ -1,0 +1,6 @@
+depthai>=2.21.2
+flask>=2.0.1
+numpy>=1.20.0
+ahrs>=0.3.0
+scipy>=1.7.0
+loguru>=0.6.0

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OAK-D Pro IMU Orientation Visualization</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .visualization {
+            flex: 1;
+            overflow: hidden;
+        }
+        .data-panel {
+            background-color: #333;
+            color: white;
+            padding: 10px;
+            font-family: monospace;
+            display: flex;
+            justify-content: space-around;
+        }
+        .data-group {
+            margin: 0 10px;
+        }
+        h1 {
+            text-align: center;
+            margin: 10px 0;
+            color: #333;
+        }
+        .status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .connected {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .disconnected {
+            background-color: #f44336;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OAK-D Pro IMU Orientation Visualization</h1>
+        <div id="status" class="status disconnected">Disconnected</div>
+        <div id="visualization" class="visualization"></div>
+        <div class="data-panel">
+            <div class="data-group">
+                <div>Euler Angles:</div>
+                <div>Roll: <span id="roll">0.0</span>°</div>
+                <div>Pitch: <span id="pitch">0.0</span>°</div>
+                <div>Yaw: <span id="yaw">0.0</span>°</div>
+            </div>
+            <div class="data-group">
+                <div>Quaternion:</div>
+                <div>W: <span id="quat-w">1.0</span></div>
+                <div>X: <span id="quat-x">0.0</span></div>
+                <div>Y: <span id="quat-y">0.0</span></div>
+                <div>Z: <span id="quat-z">0.0</span></div>
+            </div>
+            <div class="data-group">
+                <div>Accelerometer (m/s²):</div>
+                <div>X: <span id="accel-x">0.0</span></div>
+                <div>Y: <span id="accel-y">0.0</span></div>
+                <div>Z: <span id="accel-z">0.0</span></div>
+            </div>
+            <div class="data-group">
+                <div>Gyroscope (rad/s):</div>
+                <div>X: <span id="gyro-x">0.0</span></div>
+                <div>Y: <span id="gyro-y">0.0</span></div>
+                <div>Z: <span id="gyro-z">0.0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Three.js scene
+        const container = document.getElementById('visualization');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+        
+        // Add ambient light
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+        
+        // Add directional light
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight.position.set(1, 1, 1);
+        scene.add(directionalLight);
+        
+        // Create a 3D model representing the camera
+        const cameraModel = new THREE.Group();
+        
+        // Create main body
+        const bodyGeometry = new THREE.BoxGeometry(2, 1, 0.5);
+        const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x2196F3 });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        cameraModel.add(body);
+        
+        // Create lens
+        const lensGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.5, 32);
+        const lensMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+        const lens = new THREE.Mesh(lensGeometry, lensMaterial);
+        lens.rotation.x = Math.PI / 2;
+        lens.position.z = 0.5;
+        cameraModel.add(lens);
+        
+        // Add coordinate axes
+        const axesHelper = new THREE.AxesHelper(3);
+        scene.add(axesHelper);
+        
+        // Add the camera model to the scene
+        scene.add(cameraModel);
+        
+        // Position the camera
+        camera.position.z = 5;
+        camera.position.y = 2;
+        camera.lookAt(0, 0, 0);
+        
+        // Add a grid
+        const gridHelper = new THREE.GridHelper(10, 10);
+        scene.add(gridHelper);
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        });
+        
+        // Connect to server-sent events
+        const eventSource = new EventSource('/imu-data');
+        let lastUpdateTime = 0;
+        let connected = false;
+        
+        eventSource.onopen = function() {
+            document.getElementById('status').className = 'status connected';
+            document.getElementById('status').textContent = 'Connected';
+            connected = true;
+        };
+        
+        eventSource.onerror = function() {
+            document.getElementById('status').className = 'status disconnected';
+            document.getElementById('status').textContent = 'Disconnected';
+            connected = false;
+        };
+        
+        eventSource.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            
+            // Update quaternion
+            const quaternion = new THREE.Quaternion(
+                data.quaternion[1],  // x
+                data.quaternion[2],  // y
+                data.quaternion[3],  // z
+                data.quaternion[0]   // w
+            );
+            
+            // Apply quaternion to camera model
+            cameraModel.quaternion.copy(quaternion);
+            
+            // Update UI elements
+            document.getElementById('roll').textContent = data.euler.roll.toFixed(1);
+            document.getElementById('pitch').textContent = data.euler.pitch.toFixed(1);
+            document.getElementById('yaw').textContent = data.euler.yaw.toFixed(1);
+            
+            document.getElementById('quat-w').textContent = data.quaternion[0].toFixed(3);
+            document.getElementById('quat-x').textContent = data.quaternion[1].toFixed(3);
+            document.getElementById('quat-y').textContent = data.quaternion[2].toFixed(3);
+            document.getElementById('quat-z').textContent = data.quaternion[3].toFixed(3);
+            
+            document.getElementById('accel-x').textContent = data.accelerometer[0].toFixed(2);
+            document.getElementById('accel-y').textContent = data.accelerometer[1].toFixed(2);
+            document.getElementById('accel-z').textContent = data.accelerometer[2].toFixed(2);
+            
+            document.getElementById('gyro-x').textContent = data.gyroscope[0].toFixed(2);
+            document.getElementById('gyro-y').textContent = data.gyroscope[1].toFixed(2);
+            document.getElementById('gyro-z').textContent = data.gyroscope[2].toFixed(2);
+            
+            lastUpdateTime = Date.now();
+        };
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Check if data is stale (no updates for 3 seconds)
+            if (connected && Date.now() - lastUpdateTime > 3000) {
+                document.getElementById('status').className = 'status disconnected';
+                document.getElementById('status').textContent = 'Data Timeout';
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        animate();
+    </script>
+</body>
+</html>
