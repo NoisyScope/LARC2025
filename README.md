@@ -1,71 +1,38 @@
-# Installing Docker on Raspberry Pi 4 (8GB RAM) with Raspberry Pi OS 64-bit
+# LARC 2025 — Colour Perception and IMU State Estimation for an Autonomous Robot
 
-Follow these steps to install Docker on your Raspberry Pi 4:
+![Python](https://img.shields.io/badge/Python-3.9-3776AB?logo=python&logoColor=white)
+![OpenCV](https://img.shields.io/badge/OpenCV-4.x-5C3EE8?logo=opencv&logoColor=white)
+![DepthAI](https://img.shields.io/badge/DepthAI-OAK--D-8A2BE2)
+![Docker](https://img.shields.io/badge/Docker-Raspberry%20Pi%204-2496ED?logo=docker&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-## Prerequisites
+Software for the 2025 **IEEE Latin American Robotics Competition (LARC) Open Challenge** robot,
+running on a Raspberry Pi 4 with a Luxonis OAK-D. It has two subsystems:
 
-- Raspberry Pi 4 with 8GB RAM.
-- Raspberry Pi OS 64-bit installed and updated.
-- Internet connection.
-- Terminal access.
+- **Vision** (`src/vision/`): HSV segmentation of red, yellow and blue game elements with
+  morphological closing and area-filtered contours.
+- **State estimation** (`src/imu/`): an **Extended Kalman Filter** that fuses the OAK-D IMU's
+  400 Hz accelerometer and gyroscope with its rotation-vector quaternion. It removes gravity in the
+  world frame, integrates angular rate, and estimates position, velocity and orientation, with live plots.
 
-## Steps
+The predecessor perception stack (YOLOv7 + stereo 3D localization) is in [LARC](https://github.com/NoisyScope/LARC).
 
-1. **Update the System**
+## Layout
 
-    ```bash
-    sudo apt update && sudo apt upgrade -y
-    ```
+| Path | Purpose |
+|---|---|
+| `src/main.py` | Colour-detection loop |
+| `src/vision/camera_stream.py`, `color_detection.py` | Camera wrapper and HSV detector |
+| `src/utils/constants.py` | HSV thresholds per colour |
+| `src/imu/imu_processing.py` | EKF, quaternion→rotation, gravity removal, gyro integration |
+| `src/imu/imu_main.py`, `imu_plotting.py` | DepthAI IMU pipeline and live plotting |
+| `Dockerfile` | DepthAI runtime image for the Pi |
+| `docs/docker-raspberry-pi.md` | Installing Docker on Raspberry Pi OS 64-bit |
 
-2. **Install Required Packages**
+## Running
 
-    ```bash
-    sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
-    ```
-
-3. **Add Docker's Official GPG Key**
-
-    ```bash
-    curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-    ```
-
-4. **Set Up the Docker Repository**
-
-    ```bash
-    echo "deb [arch=arm64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian bullseye stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    ```
-
-5. **Install Docker**
-
-    ```bash
-    sudo apt update
-    sudo apt install -y docker-ce docker-ce-cli containerd.io
-    ```
-
-6. **Verify Docker Installation**
-
-    ```bash
-    sudo docker --version
-    ```
-
-7. **Enable and Start Docker Service**
-
-    ```bash
-    sudo systemctl enable docker
-    sudo systemctl start docker
-    ```
-
-8. **Add Your User to the Docker Group (Optional)**
-
-    ```bash
-    sudo usermod -aG docker $USER
-    ```
-
-    Log out and back in for the changes to take effect.
-
-9. **Test Docker**
-    Run the following command to test Docker:
-
-    ```bash
-    sudo docker run hello-world
-    ```
+```bash
+pip install -r requirements.txt
+python src/main.py               # colour detection (q to quit)
+cd src/imu && python imu_main.py # IMU EKF with an OAK-D connected
+```
